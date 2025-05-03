@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Evaluation Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #4a90e2;
+      --hover-color: #357abd;
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+      background: #f5f7fb;
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .sidenav {
+      background: white;
+      padding: 20px;
+      box-shadow: 2px 0 15px rgba(0, 0, 0, 0.1);
+      overflow-y: auto;
+    }
+
+    .main-content {
+      padding: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .page-thumbnail {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      transition: transform 0.2s;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+
+    .page-thumbnail:hover {
+      transform: scale(1.03);
+      border-color: var(--primary-color);
+    }
+
+    .eval-btn {
+      width: 100%;
+      margin-bottom: 15px;
+      background: var(--primary-color);
+      border: none;
+      padding: 8px;
+      border-radius: 6px;
+      color: white;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .eval-btn:hover {
+      background: var(--hover-color);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .results-table {
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary-color);
+      transition: width 0.5s ease;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .blank-page {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .blank-page::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(45deg,
+          transparent 45%,
+          rgba(255, 0, 0, 0.3) 50%,
+          transparent 55%);
+      pointer-events: none;
+    }
+
+    .blank-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: red;
+      font-weight: bold;
+      font-size: 1.2em;
+      text-shadow: 1px 1px 2px white;
+      z-index: 1;
+    }
+
+    .marks-input {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px 8px;
+      text-align: center;
+      width: 100px;
+    }
+
+    .marks-input:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.25);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Image Preview Modal -->
+  <div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Page Preview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="expandedImage" src="" style="max-width: 100%; height: 80vh; object-fit: contain;">
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Add this right after the opening <body> tag -->
+  <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Page Preview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center p-0">
+          <img id="expandedImage" src="" class="img-fluid" style="max-height: 90vh;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side Navigation -->
+  <div class="sidenav">
+    <h4 class="mb-3 text-center text-primary">Answer Sheets</h4>
+    <div class="row row-cols-2 g-3">
+      {% for page in student_pages %}
+      <div class="col">
+        <div class="page-card position-relative">
+          <img src="{{ page.image }}" class="page-thumbnail {% if page.is_blank %}blank-page{% endif %}"
+            alt="Page {{ page.page_number }}" onclick="showImageModal('{{ page.image }}')">
+          {% if page.is_blank %}
+          <div class="blank-overlay">BLANK PAGE</div>
+          {% else %}
+          <button class="eval-btn" onclick="evaluatePage({{ page.page_number }})">
+            ⚡ Page {{ page.page_number }}
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <h1 class="mb-4 text-center text-primary">Evaluation Results</h1>
+
+    <!-- Progress Section -->
+    <div class="mb-4">
+      <h5 class="mb-2">Total Progress</h5>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 0%"></div>
+      </div>
+      <div class="mt-2 text-end">
+        Total Marks: <span id="total-marks">0</span>
+      </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="results-table">
+      <table class="table table-hover align-middle">
+        <thead class="bg-primary text-white">
+          <tr>
+            <th>Question</th>
+            <th>Word Match</th>
+            <th>Concept Match</th>
+            <th>Marks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in teacher_questions %}
+          <tr id="row-{{ loop.index }}">
+            <td>Q{{ loop.index }}</td>
+            <td class="word-score">-</td>
+            <td class="concept-score">-</td>
+            <td>
+              <input type="number" class="form-control marks-input" min="0" max="5" step="0.1" value="0"
+                oninput="validateMarks(this)">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <script>
+    let totalMarks = 0;
+    const totalQuestions = {{ teacher_questions| length }};
+
+    function showLoading() {
+      document.querySelector('.loading-overlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+      document.querySelector('.loading-overlay').style.display = 'none';
+    }
+
+    function showImageModal(imgSrc) {
+      document.getElementById('expandedImage').src = imgSrc;
+      console.log(imgSrc)
+      new bootstrap.Modal(document.getElementById('imageModal')).show();
+    }
+
+    function validateMarks(input) {
+      if (input.value > 5) input.value = 5;
+      if (input.value < 0) input.value = 0;
+      calculateTotalMarks();
+    }
+
+    function calculateTotalMarks() {
+      let total = 0;
+      document.querySelectorAll('.marks-input').forEach(input => {
+        total += parseFloat(input.value) || 0;
+      });
+      document.getElementById('total-marks').textContent = total.toFixed(2);
+      const progress = (total / (totalQuestions * 5)) * 100;
+      document.querySelector('.progress-fill').style.width = `${progress}%`;
+    }
+
+    function updateUI(data, questionNumber) {
+      if (data.error) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      if (data.result) {
+        const row = document.getElementById(`row-${questionNumber}`);
+        if (row) {
+          row.querySelector('.word-score').textContent = `${data.result.word_score}%`;
+          row.querySelector('.concept-score').textContent = `${data.result.concept_score}%`;
+          const marksInput = row.querySelector('.marks-input');
+          marksInput.value = Math.min(data.result.marks, 5).toFixed(2);
+        }
+      } else if (data.results) {
+        data.results.forEach((result, index) => {
+          const row = document.getElementById(`row-${index + 1}`);
+          if (row) {
+            row.querySelector('.word-score').textContent = `${result.word_score}%`;
+            row.querySelector('.concept-score').textContent = `${result.concept_score}%`;
+            const marksInput = row.querySelector('.marks-input');
+            marksInput.value = Math.min(result.marks, 5).toFixed(2);
+          }
+        });
+        totalMarks = parseFloat(data.total_marks);
+      }
+
+      calculateTotalMarks();
+    }
+
+    async function evaluatePage(pageNumber) {
+      const btn = document.querySelector(`button[onclick="evaluatePage(${pageNumber})"]`);
+      if (btn) btn.disabled = true;
+
+      showLoading();
+      try {
+        const response = await fetch(`/evaluate/page/${pageNumber}`);
+        const data = await response.json();
+        if (response.ok) {
+          updateUI(data, pageNumber);
+        } else {
+          alert('Evaluation failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Page evaluation failed: ' + error.message);
+      } finally {
+        hideLoading();
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function evaluateAll() {
+      showLoading();
+      try {
+        const response = await fetch('/evaluate/all');
+        const data = await response.json();
+        if (response.ok) {
+          updateUI(data);
+        } else {
+          alert('Evaluation failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Evaluation failed: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+  </script>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
